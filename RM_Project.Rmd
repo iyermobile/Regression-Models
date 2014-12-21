@@ -1,0 +1,162 @@
+---
+title: Regression Models Course Project
+output:
+  html_document: default
+  pdf_document:
+    fig_caption: yes
+    fig_height: 6
+    fig_width: 6
+    highlight: default
+    includes:
+      in_header: header.tex
+fontsize: 8pt
+---
+## GOAL : Exploring the relationship between a set of variables (Transmission Type) and miles per gallon (MPG Fuel Efficiency)
+
+```{r, echo=FALSE}
+library(knitr)
+library(xtable)
+data(mtcars)
+mtcars$am <- factor(mtcars$am, levels = c(0, 1), labels = c("Automatic", "Manual"))
+opts_chunk$set(comment="", message=FALSE,fig.path='figure/mtcarsbeamer-',fig.show='hold',size='small')
+options(xtable.comment = FALSE)
+```
+
+## Report Executive Summary:
+
+
+* We are interested in determining whether an automatic or manual transmission is better for fuel efficiency (higher MPG), and we want to quantify the MPG difference between automatic and manual transmissions.  We address these questions by analyzing the Motor Trend Car Road Tests data set available in R.  In general, a car picked at random with a manual transmission has better fuel efficiency than a car picked at random with an automatic transmission.  However, once you properly account for the important confounding effect of automobile weight, there is not enough information to answer these questions about the effect of transmission type on fuel efficiency across all weight ranges.  But, we can be confident in saying that fuel efficiency decreases more slowly with respect to increased weight for automatic transmissions than for manual transmissions.
+
+## Report Exploratory Analysis:
+
+* If we plot just the variables in the question (figure 1), it seems on first look obvious that manual transmissions have a higher average MPG than automatic transmissions. We first build an exploratory linear model using every feature available in the data set (a "Funnel Flow" model):
+
+```{r}
+funnel_flow <- lm(mpg ~ ., mtcars)
+```
+
+```{r funnel, echo=FALSE, results='asis'}
+print(xtable(summary(funnel_flow)$coef), file="funnel_flow.tex", floating=FALSE)
+```
+
+* The given table lists the coefficients of the funnel flow model. With so many variables and so few data points, the p-values for the coefficients are not statistically significant at $p < 0.05$; however, weight (denoted "wt") does have the most extreme absolute p-value by far of all the variables, and a plot of weight versus MPG indicates that we should account for weight (figure 2).  This makes sense physically; it takes more energy to move heavier objects.  In fact, our initial understanding to the effect of transmission type on fuel efficiency might even be completely explained by the weight.
+
+* The funnel flow model has a positive coefficient for having a manual transmission (amManual) of 2.5202, indicating that having a manual transmission increases fuel efficiency by 2.5202 MPG when we hold the other variables constant, but the coresponding p-value is only 0.2340, which we reject at a signficance level of 0.05.  So we cannot make a statement about a significant effect on fuel efficiency by the transmission type under this model.
+
+## Analyzing the Bi-Models of Weight and Transmission Type:
+
+* For model selection, we will search for a model with a very low p-value with respect to the coefficients for transmission type, so we can be more confident about our conclusions.  Based on our exploratoration, we will consider a linear model that only takes into account weight and transmission, and one with the interaction term added:
+
+```{r}
+fit <- lm(mpg ~ am + wt, mtcars)
+interaction_fit <- lm(mpg ~ am * wt, mtcars)
+```
+
+* The given table lists the coefficients of the first model.  **After accounting for weight discrepencies, it appears that having a manual transmission might slightly reduce fuel efficiency if we assume the same rate of change in fuel efficiency with respect to weight for the two kinds of transmissions.  However, there is a very high p-value, so we would be wrong to make a such a claim on this data alone.** *If* it were signficant, we would have looked at the amManual coefficient and say that, comparing cars of the same weight, the a manual transmission would have 0.02 MPG lesser fuel efficiency. 
+
+* The given table lists the coefficients of the second model.  **With a p-value of 0.001, we can say that, for a given weight, when we go from an automatic transmission to a manual transmission, fuel efficiency degrades on average 5.2984 MPG faster.**  The corresponding plot in is in figure 4.  The p-value for the difference in the F statistic from ANOVA between the two models is `r anova(fit, interaction_fit)$"Pr(>F)"[2]`, indicating that we need to include the interaction term.
+
+```{r,  echo=FALSE}
+print(xtable(summary(fit)$coef), file="fit.tex", floating=FALSE)
+print(xtable(summary(interaction_fit)$coef), file="interaction_fit.tex", floating=FALSE)
+```
+
+\begin{figure}[h]
+\hspace{-.5\textwidth}
+\ffigbox[5cm]{
+  \begin{subfloatrow}
+    \ffigbox[\FBwidth][]
+      {\caption{Funnel flow model}}
+      {\scalebox{.75}{\input{./funnel_flow}}}
+  \end{subfloatrow}%\hspace*{\columnsep}
+  \begin{subfloatrow}
+    \vbox to 4.5cm{
+    \ffigbox[\FBwidth]
+      {\caption{Simple model}}
+      {\scalebox{.75}{\input{./fit}}}\vss
+    \ffigbox[\FBwidth]
+      {\caption{Interactions model}}
+      {\scalebox{.75}{\input{./interaction_fit}}}
+    }
+  \end{subfloatrow}
+}{\caption*{Table 1: Model Coefficients}}
+\end{figure}
+
+## Diagnostics and Discussion
+
+```{r, echo=FALSE}
+press <- resid(interaction_fit) / (1 - hatvalues(interaction_fit))
+top <- head(press[order(-abs(press))], n = 1)
+```
+
+* Figure 4 is a plot of the residuals versus the fitted values under the interaction model, as well as a Normalized Q-Q plot.  We see that we have divergent behavior in the tails, and there is almost certainly other variables that could be involved.  Finally, if we look at the PRESS residuals to find the car that deviated the most from the interactions model when held out of the model was `r names(top)`; it would be worth investigating if there are any particular features of this car that make it stand out.
+
+* Since weight has such an important impact on MPG, and there was relatively little overlap in weight distributions between the two groups (see figure 2 again), the conclusions we make are highly based on the model we use.  Because of this small overlap, it would be interesting to consider the hypothesis that companies simply build cars with the more efficient transmission type for their weight.
+
+* A caveat to our analysis is that we are using data from 1974.  It would probably serve us better to use data from cars that have benefited from forty years of advancements in automotive engineering, and in particular look at cars that come with a choice of automatic and manual transmission.
+
+## Appendix
+
+* The raw source for this analysis is at [https://github.com/iyermobile/Regression-Models](https://github.com/iyermobile/Regression-Models).
+*  The code for plotting the residuals and Q-Q plot came from http://ygc.name/2011/08/17/ggplot2-version-figures-25-recipes-started-r/](http://ygc.name/2011/08/17/ggplot2-version-figures-25-recipes-started-r/).
+
+```{r eda, echo=FALSE, message=FALSE, fig.cap="Plot of MPG by Transmission Type"}
+require(ggplot2); require(plyr)
+ggplot(mtcars, aes(am, mpg)) +
+geom_boxplot() +  geom_point() + xlab("Transmission Type") +
+ylab("Fuel Efficiency (MPG)") + guides(color = guide_legend(title = "Transmission Type"))
+```
+
+```{r weight-mpg, echo=FALSE, message=FALSE, fig.cap="Plot of Weight vs MPG"}
+ggplot(mtcars, aes(x = wt, y = mpg, color = am)) +
+geom_point() +  xlab("Weight (1000s of lbs)") + 
+ylab("Fuel Efficiency (MPG)") + guides(color = guide_legend(title = "Transmission Type"))
+```
+
+```{r split-models, echo=FALSE, message=FALSE, fig.cap="Plot of Weight vs MPG for Interactions model"}
+ggplot(mtcars, aes(x = wt, y = mpg, color = am)) +
+geom_point() +  xlab("Weight (1000s of lbs)") + geom_smooth(method = "lm", formula = y ~ x) +
+ylab("Fuel Efficiency (MPG)") + guides(color = guide_legend(title = "Transmission Type"))
+```
+
+```{r fit-plot,  echo=FALSE, message=FALSE, fig.cap="Residuals for Interactions model"}
+#The code for making these plots in ggplot2 comes from http://ygc.name/2011/08/17/ggplot2-version-figures-25-recipes-started-r/
+library(gridExtra)
+model_plot <- function(m) {
+  r <- residuals(m)
+  yh <- predict(m)
+  scatterplot <- function(x,y, title="", xlab="", ylab="") {
+    d <- data.frame(x=x,y=y)
+    p <- ggplot(d, aes(x=x,y=y)) + geom_point() +  xlab(xlab) + ylab(ylab) + ggtitle(title)
+  	return(p)
+  }
+  p1 <- scatterplot(yh,r,
+                    title="Residuals vs Fitted",
+                    xlab="Fitted values",
+                    ylab="Residuals")
+  p1 <- p1 +geom_hline(yintercept=0)#+geom_smooth()
+  s <- sqrt(deviance(m)/df.residual(m))
+  rs <- r/s
+  
+  qqplot <- function(y,
+                     distribution=qnorm,
+                     title="Normal Q-Q",
+                     xlab="Theoretical Quantiles",
+                     ylab="Sample Quantiles") {
+      require(ggplot2)
+      x <- distribution(ppoints(y))
+      d <- data.frame(x=x, y=sort(y))
+      p <- ggplot(d, aes(x=x, y=y)) +
+          geom_point() +
+              geom_line(aes(x=x, y=x)) +
+                    xlab(xlab) +
+                          ylab(ylab) + ggtitle(title)
+      return(p)
+  }
+  
+  p2 <- qqplot(rs, ylab="Standardized residuals")
+  grid.arrange(p1,p2, ncol=2)
+}
+
+model_plot(fit)
+```
